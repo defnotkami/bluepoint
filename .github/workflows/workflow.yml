@@ -2,18 +2,20 @@ name: Web Build + Deploy to GitHub Pages
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 env:
-  UV_PYTHON: 3.12
-
-  # https://flet.dev/docs/reference/environment-variables
-  FLET_CLI_NO_RICH_OUTPUT: 1
+  UV_PYTHON: "3.12"
+  FLET_CLI_NO_RICH_OUTPUT: "1"
 
 jobs:
   build:
@@ -27,13 +29,16 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Build app
-        shell: bash
+      - name: Build Flet web app
         run: |
-          uv run flet build web --yes --verbose --base-url ${GITHUB_REPOSITORY#*/} --route-url-strategy hash
+          uv run flet build web \
+            --yes \
+            --verbose \
+            --base-url "/bluepoint/" \
+            --route-url-strategy hash
 
-      - name: Upload Pages Artifact
-        uses: actions/upload-pages-artifact@v4.0.0
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
         with:
           path: build/web
           name: web-build-artifact
@@ -46,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
+      contents: read
       pages: write
       id-token: write
 
@@ -54,11 +60,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Setup Pages
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4.0.5
+        uses: actions/deploy-pages@v4
         with:
           artifact_name: web-build-artifact
