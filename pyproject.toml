@@ -16,7 +16,7 @@ dev = [
     "flet-cli>=1.0.0",
     "flet-desktop>=1.0.0",
     "flet-web>=1.0.0",
-    "pillow>=12.0.0",
+
     # Integration testing with `flet test` / pytest. The `test` extra brings in
     # pytest, pytest-asyncio and the screenshot-comparison dependencies.
     "flet[test]>=1.0.0",
