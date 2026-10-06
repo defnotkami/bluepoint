@@ -7,7 +7,6 @@ import struct
 import flet as ft
 
 import flet.canvas as cv
-import flet_webview as fwv
 
 
 def image_size(data):
@@ -410,7 +409,7 @@ class BlueprintMeasurementApp:
                             self.file_picker,
                             allow_multiple=False,
                             file_type=ft.FilePickerFileType.CUSTOM,
-                            allowed_extensions=["png", "jpg", "jpeg", "bmp", "gif", "tiff", "pdf"],
+                            allowed_extensions=["png", "jpg", "jpeg", "bmp", "gif", "tiff"],
                             with_data=True,
                         ),
                     ),
@@ -685,42 +684,13 @@ class BlueprintMeasurementApp:
 
     # ------------------------------------------------------- Image loading
     def on_file_selected(self, e: ft.FilePickerResultEvent):
-        """Load an image or PDF selected in the browser."""
+        """Load the selected blueprint from bytes; works in Flet Web and desktop."""
         if not e.files:
             return
 
         selected = e.files[0]
         if not selected.bytes:
-            self.status_text.value = "Could not read the selected file."
-            self.page.update()
-            return
-
-        filename = (selected.name or "").lower()
-        is_pdf = filename.endswith(".pdf") or selected.bytes.startswith(b"%PDF-")
-
-        # Reset project state for every new document.
-        self.tool = "calibrate"
-        self.calibration_points = []
-        self.pending = []
-        self.measurements = []
-        self.scale_factor = None
-        self.undo_stack.clear()
-        self.redo_stack.clear()
-
-        if is_pdf:
-            pdf_src = (
-                "data:application/pdf;base64,"
-                + base64.b64encode(selected.bytes).decode("ascii")
-            )
-
-            self.pdf_viewer = fwv.WebView(url=pdf_src, expand=True)
-            self.image_data = selected.bytes
-            self.img_w = 0
-            self.img_h = 0
-            self.stage.content = self.pdf_viewer
-            self.status_text.value = (
-                "PDF loaded. Use the PDF viewer to zoom and navigate pages."
-            )
+            self.status_text.value = "Could not read the selected image."
             self.page.update()
             return
 
@@ -731,9 +701,11 @@ class BlueprintMeasurementApp:
             self.page.update()
             return
 
-        self.pdf_viewer = None
         self.image_data = selected.bytes
 
+        # Flet supports byte sources, but for Flet Web a browser data URL is
+        # the most reliable way to pass a locally selected file to <img>.
+        filename = (selected.name or "").lower()
         mime = {
             ".png": "image/png",
             ".jpg": "image/jpeg",
@@ -746,60 +718,45 @@ class BlueprintMeasurementApp:
             "." + filename.rsplit(".", 1)[-1] if "." in filename else "",
             "application/octet-stream",
         )
+        image_src = "data:" + mime + ";base64," + base64.b64encode(self.image_data).decode("ascii")
 
-        image_src = (
-            "data:" + mime + ";base64:"
-            + base64.b64encode(self.image_data).decode("ascii")
-        )
-
-        # Fit the entire blueprint in the available stage on first load.
-        # InteractiveViewer then allows zooming and panning.
-        page_w = self.page.width or 1200
-        page_h = self.page.height or 800
-        available_w = max(300, page_w - 380)
-        available_h = max(300, page_h - 190)
-
-        fit_scale = min(
-            available_w / self.img_w,
-            available_h / self.img_h,
-            1.0,
-        )
-
-        display_w = max(1, self.img_w * fit_scale)
-        display_h = max(1, self.img_h * fit_scale)
-
-        # Image and measurement canvas have identical displayed dimensions.
+        # Canvas overlay is the same size as the source image, so measurement
+        # coordinates remain in image pixels even when the viewer is zoomed.
         self.canvas = cv.Canvas(
             shapes=[],
-            width=display_w,
-            height=display_h,
+            width=self.img_w,
+            height=self.img_h,
         )
 
-        self.viewer.content = ft.Container(
-            width=display_w,
-            height=display_h,
-            alignment=ft.Alignment.CENTER,
-            content=ft.GestureDetector(
-                on_tap_down=self.on_image_click,
-                content=ft.Stack(
-                    [
-                        ft.Image(
-                            src=image_src,
-                            width=display_w,
-                            height=display_h,
-                            fit=ft.BoxFit.CONTAIN,
-                        ),
-                        self.canvas,
-                    ],
-                    width=display_w,
-                    height=display_h,
-                ),
+        self.viewer.content = ft.GestureDetector(
+            on_tap_down=self.on_image_click,
+            content=ft.Stack(
+                [
+                    ft.Image(
+                        src=image_src,
+                        width=self.img_w,
+                        height=self.img_h,
+                        fit=ft.BoxFit.FILL,
+                    ),
+                    self.canvas,
+                ],
+                width=self.img_w,
+                height=self.img_h,
             ),
         )
 
         self.stage.content = self.viewer
-        self.status_text.value = self.tool_hint()
         self.page.update()
+
+        # Fresh project: wipe state and history.
+        self.tool = "calibrate"
+        self.calibration_points = []
+        self.pending = []
+        self.measurements = []
+        self.scale_factor = None
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self.status_text.value = self.tool_hint()
         self.refresh()
 
     # ------------------------------------------------------------ History
