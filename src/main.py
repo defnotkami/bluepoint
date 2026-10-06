@@ -1,3 +1,4 @@
+import base64
 import copy
 
 import math
@@ -20,7 +21,8 @@ def image_size(data):
         return struct.unpack("<HH", data[6:10])
     # BMP
     if data[:2] == b"BM" and len(data) >= 26:
-        return struct.unpack("<ii", data[18:26])[:2]
+        w, h = struct.unpack("<ii", data[18:26])
+        return abs(w), abs(h)
     # JPEG
     if data[:2] == b"\xff\xd8":
         i = 2
@@ -701,6 +703,23 @@ class BlueprintMeasurementApp:
 
         self.image_data = selected.bytes
 
+        # Flet supports byte sources, but for Flet Web a browser data URL is
+        # the most reliable way to pass a locally selected file to <img>.
+        filename = (selected.name or "").lower()
+        mime = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".tif": "image/tiff",
+            ".tiff": "image/tiff",
+        }.get(
+            "." + filename.rsplit(".", 1)[-1] if "." in filename else "",
+            "application/octet-stream",
+        )
+        image_src = "data:" + mime + ";base64," + base64.b64encode(self.image_data).decode("ascii")
+
         # Canvas overlay is the same size as the source image, so measurement
         # coordinates remain in image pixels even when the viewer is zoomed.
         self.canvas = cv.Canvas(
@@ -714,7 +733,7 @@ class BlueprintMeasurementApp:
             content=ft.Stack(
                 [
                     ft.Image(
-                        src=self.image_data,
+                        src=image_src,
                         width=self.img_w,
                         height=self.img_h,
                         fit=ft.BoxFit.FILL,
