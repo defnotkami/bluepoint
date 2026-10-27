@@ -31,9 +31,12 @@ jobs:
 
       - name: Build Flet web app
         run: |
+          # Python 3.13's browser runtime (Pyodide 0.29) ships PyMuPDF for
+          # PDF support; the 3.14 runtime (Pyodide 314.0.7) no longer does.
           uv run flet build web \
             --yes \
             --verbose \
+            --python-version 3.13 \
             --base-url "/bluepoint/" \
             --route-url-strategy hash
 
